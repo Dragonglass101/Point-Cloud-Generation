@@ -57,8 +57,9 @@ def unpack_batch_fixed(batch, device):
     input_images = batch['inputImage'].float().to(device)
     depthGT = batch['depthGT'].float().to(device)
     maskGT = batch['maskGT'].float().to(device)
+    pointCloud = batch['pointCloud'].float().to(device)
 
-    return input_images, depthGT, maskGT
+    return input_images, depthGT, maskGT, pointCloud
 
 def make_data_novel(cfg):
     ds_tr = data.PointCloud2dDataset(
@@ -81,9 +82,10 @@ def unpack_batch_novel(batch, device):
     input_images = batch['inputImage'].float().to(device)
     renderTrans = batch['targetTrans'].float().to(device)
     depthGT = batch['depthGT'].float().to(device)
+    pointCloud = batch['pointCloud'].float().to(device)
     maskGT = batch['maskGT'].float().to(device)
 
-    return input_images, renderTrans, depthGT, maskGT
+    return input_images, renderTrans, depthGT, maskGT, pointCloud
 
 
 def define_losses():

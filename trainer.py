@@ -54,6 +54,23 @@ class TrainerStage1:
         print("======= TRAINING DONE =======")
         return pd.DataFrame(self.history)
 
+    def chamfer_distance_loss(self, X, Y):
+        # X, Y are 3D point clouds of shape (batch_size, num_points, 3)
+        print("chamfer", X.shape, Y.shape)
+        X_expand = X.unsqueeze(2)  # (batch_size, num_points, 1, 3)
+        Y_expand = Y.unsqueeze(1)  # (batch_size, 1, num_points, 3)
+
+        # Compute L2 distance
+        distances = torch.sum((X_expand - Y_expand)**2, dim=-1)  # (batch_size, num_points, num_points)
+
+        # Compute minimum distances
+        min_distances_XY, _ = torch.min(distances, dim=2)
+        min_distances_YX, _ = torch.min(distances, dim=1)
+
+        # Chamfer distance is the sum of minimum distances in both directions
+        chamfer_distance = torch.mean(min_distances_XY) + torch.mean(min_distances_YX)
+
+        return chamfer_distance
 
     def _train_on_epoch(self, model, optimizer):
         model.train()
@@ -64,7 +81,8 @@ class TrainerStage1:
         running_loss = 0.0
 
         for self.iteration, batch in enumerate(data_loader, self.iteration):
-            input_images, depthGT, maskGT = utils.unpack_batch_fixed(batch, self.cfg.device)
+            input_images, depthGT, maskGT, pointCloud = utils.unpack_batch_fixed(batch, self.cfg.device)
+            print("point cloud", pointCloud.shape)
             # ------ define ground truth------
             XGT, YGT = torch.meshgrid([
                 torch.arange(self.cfg.outH), # [H,W]
