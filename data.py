@@ -23,13 +23,13 @@ class PointCloud2dDataset(Dataset):
 
     def __getitem__(self, idx):
         CAD = self.CADs[idx]
-        image_in = np.load(f"{self.cfg.path}/{self.cfg.category}_inputRGB/{CAD}.npy")
+        image_in = np.load(f"../{self.cfg.path}/{self.cfg.category}_inputRGB/{CAD}.npy")
         image_in = image_in / 255.0
 
-        point_cloud = np.load(f"{self.cfg.path}/{self.cfg.category}_pointCloud/{CAD}.npy")
+        point_cloud = np.load(f"../{self.cfg.path}/{self.cfg.category}_pointCloud/{CAD}.npy")
 
         if self.loadNovel:
-            raw_data = scipy.io.loadmat(f"{self.cfg.path}/{self.cfg.category}_depth/{CAD}.mat")
+            raw_data = scipy.io.loadmat(f"../{self.cfg.path}/{self.cfg.category}_depth/{CAD}.mat")
             depth = raw_data["Z"]
             trans = raw_data["trans"]
             mask = depth != 0
@@ -38,7 +38,7 @@ class PointCloud2dDataset(Dataset):
             return {"image_in": image_in, "point_cloud": point_cloud, "depth": depth, "mask": mask, "trans": trans}
 
         if self.loadFixedOut:
-            raw_data = scipy.io.loadmat(f"{self.cfg.path}/{self.cfg.category}_depth_fixed{self.cfg.outViewN}/{CAD}.mat")
+            raw_data = scipy.io.loadmat(f"../{self.cfg.path}/{self.cfg.category}_depth_fixed{self.cfg.outViewN}/{CAD}.mat")
             depth = raw_data["Z"]
             mask = depth != 0
             depth[~mask] = self.cfg.renderDepth
