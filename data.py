@@ -10,7 +10,7 @@ class PointCloud2dDataset(Dataset):
         self.loadNovel = loadNovel
         self.loadFixedOut = loadFixedOut
         self.load = "test" if loadTest else "train"
-        list_file = f"{cfg.path}/{cfg.category}_{self.load}.list"
+        list_file = f"../{cfg.path}/{cfg.category}_{self.load}.list"
         self.CADs = []
         with open(list_file) as file:
             for line in file:

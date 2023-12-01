@@ -14,8 +14,8 @@ def check_missing_files(file_list_path, data_folder):
     return missing_files
 
 # Example usage
-train_list_path = "data/03001627_train.list"
-data_folder = "data/03001627_pointCloud"
+train_list_path = "../data/03001627_train.list"
+data_folder = "../data/03001627_pointCloud"
 
 missing_files = check_missing_files(train_list_path, data_folder)
 

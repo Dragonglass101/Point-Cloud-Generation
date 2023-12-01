@@ -14,7 +14,7 @@ def read_obj_file(file_path):
     return np.array(vertices)
 
 def process_file(file_name, data_folder, target_size=319348):
-    obj_file_path = f"{data_folder}/{file_name}/models/model_normalized.obj"
+    obj_file_path = f"../{data_folder}/{file_name}/models/model_normalized.obj"
     point_cloud = read_obj_file(obj_file_path)
 
     # If the point cloud size is less than the target size, pad with zeros
@@ -24,7 +24,7 @@ def process_file(file_name, data_folder, target_size=319348):
         point_cloud = np.vstack([point_cloud, padding])
 
     # Process the point cloud as needed
-    np.save(f"{data_folder}/03001627_pointCloud/{file_name.split('/')[1]}.npy", point_cloud[:target_size])
+    np.save(f"../{data_folder}/03001627_pointCloud/{file_name.split('/')[1]}.npy", point_cloud[:target_size])
 
     return point_cloud.shape
 
@@ -52,8 +52,8 @@ def process_files_parallel(file_list_path, data_folder):
     return max_size
 
 # Example usage
-train_list_path = "data/03001627_train.list"
-data_folder = "data"
+train_list_path = "render/03001627.list"
+data_folder = "data/03001627"
 max_point_cloud_size = process_files_parallel(train_list_path, data_folder)
 print("max point cloud size: ", max_point_cloud_size)
 
