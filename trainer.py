@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import scipy.io
 import torch
+from scipy.spatial import KDTree
 
 import transform
 import utils
@@ -33,44 +34,80 @@ class TrainerStage1:
             print(f"Epoch {self.epoch}:")
 
             train_epoch_loss = self._train_on_epoch(model, optimizer)
-            val_epoch_loss = self._val_on_epoch(model)
+            # val_epoch_loss = self._val_on_epoch(model)
 
-            hist = {
-                'epoch': self.epoch,
-                'train_loss_XYZ': train_epoch_loss["epoch_loss_XYZ"],
-                'train_loss_mask': train_epoch_loss["epoch_loss_mask"],
-                'train_loss': train_epoch_loss["epoch_loss"],
-                'val_loss_XYZ': val_epoch_loss["epoch_loss_XYZ"],
-                'val_loss_mask': val_epoch_loss["epoch_loss_mask"],
-                'val_loss': val_epoch_loss["epoch_loss"],
-            }
-            self.history.append(hist)
+            #hist = {
+            #    'epoch': self.epoch,
+            #    'train_loss_XYZ': train_epoch_loss["epoch_loss_XYZ"],
+            #    'train_loss_mask': train_epoch_loss["epoch_loss_mask"],
+            #    'train_loss': train_epoch_loss["epoch_loss"],
+            #    'val_loss_XYZ': val_epoch_loss["epoch_loss_XYZ"],
+            #    'val_loss_mask': val_epoch_loss["epoch_loss_mask"],
+            #    'val_loss': val_epoch_loss["epoch_loss"],
+            #}
+            #self.history.append(hist)
 
-            if self.on_after_epoch is not None:
-                images = self._make_images_board(model)
-                self.on_after_epoch(model, pd.DataFrame(self.history),
-                                    images, self.epoch)
+            #if self.on_after_epoch is not None:
+            #    images = self._make_images_board(model)
+            #    self.on_after_epoch(model, pd.DataFrame(self.history),
+            #                        images, self.epoch)
 
         print("======= TRAINING DONE =======")
         return pd.DataFrame(self.history)
 
+    # def chamfer_distance_loss(self, X, Y):
+    #     max_len = 0
+    #     for i in range(24):
+    #         max_len = max(max_len, len(Y[i]))
+
+    #     Z = np.zeros((24, max_len, 3))
+    #     for i in range(24):
+    #         Z[i, :len(Y[i])] = Y[i]
+    #     print("Z shape", Z.shape)
+
+    #     # Convert NumPy array Y to torch tensor
+    #     Y_tensor = torch.from_numpy(Z).float().to(X.device)
+
+    #     # Compute L2 distance
+    #     distances = torch.sum((X - Y_tensor)**2, dim=-1)  # (batch_size, num_points, num_points)
+
+    #     # Compute minimum distances
+    #     min_distances_XY, _ = torch.min(distances, dim=2)
+    #     min_distances_YX, _ = torch.min(distances, dim=1)
+
+    #     # Chamfer distance is the sum of minimum distances in both directions
+    #     chamfer_distance = torch.mean(min_distances_XY) + torch.mean(min_distances_YX)
+
+    #     return chamfer_distance
     def chamfer_distance_loss(self, X, Y):
-        # X, Y are 3D point clouds of shape (batch_size, num_points, 3)
-        print("chamfer", X.shape, Y.shape)
-        X_expand = X.unsqueeze(2)  # (batch_size, num_points, 1, 3)
-        Y_expand = Y.unsqueeze(1)  # (batch_size, 1, num_points, 3)
+        """
+        Computes the chamfer distance between two sets of points X and Y.
+        """
+        max_len = 0
+        for i in range(24):
+            max_len = max(max_len, len(Y[i]))
+        B = np.zeros((24, max_len, 3))
+        for i in range(24):
+            B[i, :len(Y[i])] = Y[i]
+        A = X.detach().cpu().numpy()
 
-        # Compute L2 distance
-        distances = torch.sum((X_expand - Y_expand)**2, dim=-1)  # (batch_size, num_points, num_points)
+        loss = 0
+        for i in range(24):
+            # print("sizes", A[i].shape, B[i].shape)
+            if A[i].shape[0] > 200000:
+                A_res = A[i][::5]
+                # print("resized", A_res.shape)
+            else:
+                A_res = A[i]
+            tree = KDTree(B[i])
+            dist_A = tree.query(A_res)[0]
+            tree = KDTree(A_res)
+            dist_B = tree.query(B[i])[0]
+            loss += np.mean(dist_A) + np.mean(dist_B)
+            print(i+1, "Current Chamfer Loss:", loss)
 
-        # Compute minimum distances
-        min_distances_XY, _ = torch.min(distances, dim=2)
-        min_distances_YX, _ = torch.min(distances, dim=1)
+        return torch.tensor(loss, dtype=torch.float32, device=X.device)
 
-        # Chamfer distance is the sum of minimum distances in both directions
-        chamfer_distance = torch.mean(min_distances_XY) + torch.mean(min_distances_YX)
-
-        return chamfer_distance
 
     def _train_on_epoch(self, model, optimizer):
         model.train()
@@ -79,10 +116,11 @@ class TrainerStage1:
         running_loss_XYZ = 0.0
         running_loss_mask = 0.0
         running_loss = 0.0
-
+        fuseTrans = self.cfg.fuseTrans
         for self.iteration, batch in enumerate(data_loader, self.iteration):
             input_images, depthGT, maskGT, pointCloud = utils.unpack_batch_fixed(batch, self.cfg.device)
-            print("point cloud", pointCloud.shape)
+            # print(input_images.shape)
+            # print("point cloud", pointCloud.shape)
             # ------ define ground truth------
             XGT, YGT = torch.meshgrid([
                 torch.arange(self.cfg.outH), # [H,W]
@@ -97,11 +135,22 @@ class TrainerStage1:
                 optimizer.zero_grad()
 
                 XYZ, maskLogit = model(input_images)
+                XYZid, ML = transform.fuse3D(self.cfg, XYZ, maskLogit, fuseTrans)
+                XYZid, ML = XYZid.permute([0, 2, 1]), ML.squeeze()
+                points24 = np.zeros([self.cfg.inputViewN], dtype=object)
+                for a in range(self.cfg.inputViewN):
+                    xyz = XYZid[a] #[VHW, 3]
+                    ml = ML[a] #[VHW]
+                    points24[a] = (xyz[ml > 0]).detach().cpu().numpy()
+
+                # print("model", XYZ.shape, maskLogit.shape, XYZid.shape, ML.shape)
                 XY = XYZ[:, :self.cfg.outViewN * 2, :, :]
                 depth = XYZ[:, self.cfg.outViewN * 2:self.cfg.outViewN * 3, :,  :]
                 mask = (maskLogit > 0).bool()
                 # ------ Compute loss ------
-                loss_XYZ = self.l1(XY, XYGT)
+                chamfer_loss = self.chamfer_distance_loss(pointCloud, points24)
+                loss_XYZ = chamfer_loss
+                # loss_XYZ = self.l1(XY, XYGT)
                 loss_XYZ += self.l1(depth.masked_select(mask),
                                     depthGT.masked_select(mask))
                 loss_mask = self.sigmoid_bce(maskLogit, maskGT)
@@ -503,7 +552,8 @@ class Validator:
                                 .permute((0,3,1,2))\
                                 .float().to(self.cfg.device)
             points24 = np.zeros([self.cfg.inputViewN, 1], dtype=object)
-
+            print(self.dataset[i])
+            print(input_images.shape)
             XYZ, maskLogit = model(input_images)
             # print(XYZ.shape);
             mask = (maskLogit > 0).float()

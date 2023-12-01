@@ -12,9 +12,9 @@ def chamfer_distance(A, B):
     return np.mean(dist_A) + np.mean(dist_B)
 
 
-number_points = 1000
-pcd1 = np.random.rand(number_points, 3)  # uniform distribution over [0, 1)
-pcd2 = np.random.rand(number_points, 3)  # uniform distribution over [0, 1)
+number_points = 86000
+for i in range(24):
+    pcd1 = np.random.rand(number_points, 3)  # uniform distribution over [0, 1)
+    pcd2 = np.random.rand(number_points, 3)  # uniform distribution over [0, 1)
 
-
-print(chamfer_distance(pcd1, pcd2))
+    print(chamfer_distance(pcd1, pcd2))
